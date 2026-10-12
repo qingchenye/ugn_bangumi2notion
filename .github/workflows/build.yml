@@ -32,8 +32,8 @@ jobs:
       # 直接调用作者写好的 tool/build.dart 脚本进行 Windows 自动化打包与 DLL 补全
       - name: Build Windows Release
         env:
-          BANGUMI_CLIENT_ID: "dummy_client_id"
-          BANGUMI_CLIENT_SECRET: "dummy_client_secret"
+          BANGUMI_CLIENT_ID: "bgm72826acc4d1ec10db"
+          BANGUMI_CLIENT_SECRET: "3fb67a0b1ee0f5802a97c0c59f1ecfac"
         run: dart run tool/build.dart --platform windows --release
 
       # 将编译成功、并已补全 VC++ 运行库的完整文件夹打成 zip 包上传
