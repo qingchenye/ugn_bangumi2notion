@@ -7,33 +7,36 @@ jobs:
   build:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-      - uses: subosito/flutter-action@v2
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
         with:
           channel: 'stable'
 
       - name: Install dependencies
         run: flutter pub get
 
-      # 自动生成临时 .env，防止因缺失配置文件导致 Flutter 打包资源时报错
-      - name: Create placeholder .env
+      # 关键步骤：因为 pubspec.yaml 中强制要求了 .env 文件
+      # 此步骤会在打包前自动补全 .env，彻底解决资源缺失导致的崩溃问题
+      - name: Create required .env file
         run: |
           if (Test-Path .env.example) {
             Copy-Item .env.example .env
           } else {
-            New-Item -Path . -Name ".env" -ItemType "file" -Value "NOTION_TOKEN=dummy`nNOTION_DATABASE_ID=dummy"
+            Set-Content -Path .env -Value "NOTION_TOKEN=dummy`nNOTION_DATABASE_ID=dummy"
           }
         shell: powershell
 
-      # 使用作者推荐的专用脚本 build.dart 进行 Windows 打包
-      - name: Build Windows
+      # 直接调用作者写好的 tool/build.dart 脚本进行 Windows 自动化打包与 DLL 补全
+      - name: Build Windows Release
         env:
           BANGUMI_CLIENT_ID: "dummy_client_id"
           BANGUMI_CLIENT_SECRET: "dummy_client_secret"
         run: dart run tool/build.dart --platform windows --release
 
-      # 上传编译好的压缩包
+      # 将编译成功、并已补全 VC++ 运行库的完整文件夹打成 zip 包上传
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
