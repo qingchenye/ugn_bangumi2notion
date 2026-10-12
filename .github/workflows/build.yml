@@ -18,24 +18,62 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
-      # 关键修复：使用 PowerShell Core (pwsh) 强制生成标准 UTF-8 编码的 .env 文件
-      - name: Create required .env file
+      # 1. 编译前强制生成根目录 .env 文件
+      - name: Create root .env file
         shell: pwsh
         run: |
-          if (Test-Path .env.example) {
-            Copy-Item .env.example .env
-          } else {
-            [System.IO.File]::WriteAllText("$PWD\.env", "NOTION_TOKEN=dummy`nNOTION_DATABASE_ID=dummy")
-          }
+          @'
+          NOTION_TOKEN=
+          NOTION_DATABASE_ID=
+          '@ | Set-Content -Path .env -Encoding utf8
 
-      # 打包 Windows 软件（记得将下面的 ID 和 Secret 替换为你自己在 Bangumi 申请的真实值）
+      # 2. 关键补丁：直接给 Flutter 注入自动代理拦截器（彻底告别 TUN 模式）
+      - name: Inject Auto-Proxy Patch
+        shell: pwsh
+        run: |
+          $mainPath = "lib/main.dart"
+          $patchCode = @"
+
+import 'dart:io';
+
+class AutoProxyOverrides extends HttpOverrides {
+  @override
+  HttpClient createHttpClient(SecurityContext? context) {
+    final client = super.createHttpClient(context);
+    client.badCertificateCallback = (cert, host, port) => true;
+    client.findProxy = (uri) {
+      var envProxy = HttpClient.findProxyFromEnvironment(uri);
+      if (envProxy.isNotEmpty && envProxy != 'DIRECT') {
+        return envProxy;
+      }
+      return 'PROXY 127.0.0.1:10809; PROXY 127.0.0.1:7890; PROXY 127.0.0.1:7897; DIRECT';
+    };
+    return client;
+  }
+}
+"@
+          $content = Get-Content $mainPath -Raw
+          $content = $content + "`n" + $patchCode
+          $content =$content -replace "void main\(\) async \{", "void main() async {`n  HttpOverrides.global = AutoProxyOverrides();"
+          $content = $content -replace "void main\(\) \{", "void main() {`n  HttpOverrides.global = AutoProxyOverrides();"
+          Set-Content -Path $mainPath -Value$content -Encoding utf8
+
+      # 3. 构建软件
       - name: Build Windows Release
         env:
-          BANGUMI_CLIENT_ID: "bgm72826acc4d1ec10db"
-          BANGUMI_CLIENT_SECRET: "3fb67a0b1ee0f5802a97c0c59f1ecfac"
+          BANGUMI_CLIENT_ID: "你的Bangumi_App_ID"
+          BANGUMI_CLIENT_SECRET: "你的Bangumi_App_Secret"
         run: dart run tool/build.dart --platform windows --release
 
-      # 上传编译好的软件压缩包
+      # 4. 复制 .env 到资源包路径 data/flutter_assets/
+      - name: Copy .env to flutter_assets
+        shell: pwsh
+        run: |
+          $targetDir = "build/windows/x64/runner/Release/data/flutter_assets"
+          if (!(Test-Path $targetDir)) { New-Item -ItemType Directory -Path$targetDir }
+          Copy-Item .env "$targetDir\.env"
+
+      # 5. 上传成品包
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
