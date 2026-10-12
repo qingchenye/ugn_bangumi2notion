@@ -16,7 +16,7 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
-      # 步骤 1：自动生成临时 .env，防止因缺失 Asset 导致崩溃
+      # 自动生成临时 .env，防止因缺失配置文件导致 Flutter 打包资源时报错
       - name: Create placeholder .env
         run: |
           if (Test-Path .env.example) {
@@ -26,19 +26,14 @@ jobs:
           }
         shell: powershell
 
-      # 步骤 2：生成可能缺失的代码文件（如果项目没用到会自动跳过）
-      - name: Run build_runner
-        run: dart run build_runner build --delete-conflicting-outputs
-        continue-on-error: true
-
-      # 步骤 3：使用作者推荐的专用脚本 build.dart 进行打包
+      # 使用作者推荐的专用脚本 build.dart 进行 Windows 打包
       - name: Build Windows
         env:
           BANGUMI_CLIENT_ID: "dummy_client_id"
           BANGUMI_CLIENT_SECRET: "dummy_client_secret"
         run: dart run tool/build.dart --platform windows --release
 
-      # 步骤 4：上传编译完成的 zip 包
+      # 上传编译好的压缩包
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
