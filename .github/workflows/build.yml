@@ -18,25 +18,24 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
-      # 关键步骤：因为 pubspec.yaml 中强制要求了 .env 文件
-      # 此步骤会在打包前自动补全 .env，彻底解决资源缺失导致的崩溃问题
+      # 关键修复：使用 PowerShell Core (pwsh) 强制生成标准 UTF-8 编码的 .env 文件
       - name: Create required .env file
+        shell: pwsh
         run: |
           if (Test-Path .env.example) {
             Copy-Item .env.example .env
           } else {
-            Set-Content -Path .env -Value "NOTION_TOKEN=dummy`nNOTION_DATABASE_ID=dummy"
+            [System.IO.File]::WriteAllText("$PWD\.env", "NOTION_TOKEN=dummy`nNOTION_DATABASE_ID=dummy")
           }
-        shell: powershell
 
-      # 直接调用作者写好的 tool/build.dart 脚本进行 Windows 自动化打包与 DLL 补全
+      # 打包 Windows 软件（记得将下面的 ID 和 Secret 替换为你自己在 Bangumi 申请的真实值）
       - name: Build Windows Release
         env:
           BANGUMI_CLIENT_ID: "bgm72826acc4d1ec10db"
           BANGUMI_CLIENT_SECRET: "3fb67a0b1ee0f5802a97c0c59f1ecfac"
         run: dart run tool/build.dart --platform windows --release
 
-      # 将编译成功、并已补全 VC++ 运行库的完整文件夹打成 zip 包上传
+      # 上传编译好的软件压缩包
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
