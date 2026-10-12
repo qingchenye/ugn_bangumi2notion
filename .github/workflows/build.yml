@@ -27,33 +27,33 @@ jobs:
           NOTION_DATABASE_ID=
           '@ | Set-Content -Path .env -Encoding utf8
 
-      # 2. 关键补丁：直接给 Flutter 注入自动代理拦截器（彻底告别 TUN 模式）
+      # 2. 注入自动代理拦截器（使用数组规避 YAML 缩进报错，彻底告别 TUN 模式）
       - name: Inject Auto-Proxy Patch
         shell: pwsh
         run: |
           $mainPath = "lib/main.dart"
-          $patchCode = @"
-
-import 'dart:io';
-
-class AutoProxyOverrides extends HttpOverrides {
-  @override
-  HttpClient createHttpClient(SecurityContext? context) {
-    final client = super.createHttpClient(context);
-    client.badCertificateCallback = (cert, host, port) => true;
-    client.findProxy = (uri) {
-      var envProxy = HttpClient.findProxyFromEnvironment(uri);
-      if (envProxy.isNotEmpty && envProxy != 'DIRECT') {
-        return envProxy;
-      }
-      return 'PROXY 127.0.0.1:10809; PROXY 127.0.0.1:7890; PROXY 127.0.0.1:7897; DIRECT';
-    };
-    return client;
-  }
-}
-"@
-          $content = Get-Content $mainPath -Raw
-          $content = $content + "`n" + $patchCode
+          $patchLines = @(
+            "",
+            "import 'dart:io';",
+            "",
+            "class AutoProxyOverrides extends HttpOverrides {",
+            "  @override",
+            "  HttpClient createHttpClient(SecurityContext? context) {",
+            "    final client = super.createHttpClient(context);",
+            "    client.badCertificateCallback = (cert, host, port) => true;",
+            "    client.findProxy = (uri) {",
+            "      var envProxy = HttpClient.findProxyFromEnvironment(uri);",
+            "      if (envProxy.isNotEmpty && envProxy != 'DIRECT') {",
+            "        return envProxy;",
+            "      }",
+            "      return 'PROXY 127.0.0.1:10809; PROXY 127.0.0.1:7890; PROXY 127.0.0.1:7897; DIRECT';",
+            "    };",
+            "    return client;",
+            "  }",
+            "}"
+          )
+          Add-Content -Path $mainPath -Value ($patchLines -join "`n") -Encoding utf8
+          $content = Get-Content$mainPath -Raw
           $content =$content -replace "void main\(\) async \{", "void main() async {`n  HttpOverrides.global = AutoProxyOverrides();"
           $content = $content -replace "void main\(\) \{", "void main() {`n  HttpOverrides.global = AutoProxyOverrides();"
           Set-Content -Path $mainPath -Value$content -Encoding utf8
